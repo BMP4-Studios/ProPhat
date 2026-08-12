@@ -74,7 +74,7 @@ jobs:
           start-xvfb: 'true'
 
       - name: Cache the build
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Configure
         run: >-
