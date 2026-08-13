@@ -152,7 +152,7 @@ void ProPhatLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int 
         }
 
 #if USE_SVG
-        const auto imageBounds = rotarySliderDrawableImage->getBounds().toFloat();
+        const auto imageBounds = rotarySliderDrawableImage->getDrawableBounds();
         const auto scaleFactor = squareSide / imageBounds.getWidth();
 
         rotarySliderDrawableImage->draw (g, 1.f, juce::AffineTransform::scale (scaleFactor).translated (xTranslation + gap, yTranslation + gap)
