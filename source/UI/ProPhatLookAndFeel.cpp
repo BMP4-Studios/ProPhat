@@ -112,15 +112,10 @@ void ProPhatLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int 
         g.setColour (outline);
         juce::Path path;
 
-#if 0
-        path.startNewSubPath (bounds.getX(), bounds.getCentreY());
-        path.lineTo (bounds.getRight(), bounds.getCentreY());
-#else
-        auto radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) / 2.0f;
-        auto lineW = juce::jmin (8.0f, radius * 0.5f);
-        auto arcRadius = radius - lineW * 0.5f;
+        const auto radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) / 2.0f;
+        const auto lineW = juce::jmin (8.0f, radius * 0.5f);
+        const auto arcRadius = radius - lineW * 0.5f;
         path.addCentredArc (bounds.getCentreX(), bounds.getCentreY(), arcRadius, arcRadius, 0.0f, rotaryStartAngle, rotaryEndAngle, true);
-#endif
 
         auto type = juce::PathStrokeType (1.f, juce::PathStrokeType::beveled, juce::PathStrokeType::square);
         float lenghts[] = {1.f, 8.f};
