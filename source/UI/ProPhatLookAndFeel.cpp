@@ -112,15 +112,10 @@ void ProPhatLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int 
         g.setColour (outline);
         juce::Path path;
 
-#if 0
-        path.startNewSubPath (bounds.getX(), bounds.getCentreY());
-        path.lineTo (bounds.getRight(), bounds.getCentreY());
-#else
-        auto radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) / 2.0f;
-        auto lineW = juce::jmin (8.0f, radius * 0.5f);
-        auto arcRadius = radius - lineW * 0.5f;
+        const auto radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) / 2.0f;
+        const auto lineW = juce::jmin (8.0f, radius * 0.5f);
+        const auto arcRadius = radius - lineW * 0.5f;
         path.addCentredArc (bounds.getCentreX(), bounds.getCentreY(), arcRadius, arcRadius, 0.0f, rotaryStartAngle, rotaryEndAngle, true);
-#endif
 
         auto type = juce::PathStrokeType (1.f, juce::PathStrokeType::beveled, juce::PathStrokeType::square);
         float lenghts[] = {1.f, 8.f};
@@ -152,7 +147,11 @@ void ProPhatLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int 
         }
 
 #if USE_SVG
-        const auto imageBounds = rotarySliderDrawableImage->getDrawableBounds();
+        //TODO: this used to be const auto imageBounds = rotarySliderDrawableImage->getBounds().toFloat(); and it was centered, unclear why we have to do all this faffing now
+        auto imageBounds = rotarySliderDrawableImage->getDrawableBounds();
+        imageBounds.setWidth (imageBounds.getWidth() + 2 * imageBounds.getX());
+        imageBounds.setHeight (imageBounds.getHeight() + 2 * imageBounds.getY());
+        imageBounds.setPosition (0.f, 0.f);
         const auto scaleFactor = squareSide / imageBounds.getWidth();
 
         rotarySliderDrawableImage->draw (g, 1.f, juce::AffineTransform::scale (scaleFactor).translated (xTranslation + gap, yTranslation + gap)
@@ -161,7 +160,7 @@ void ProPhatLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int 
         auto imageBounds = rotarySliderImage.getBounds().toFloat();
         auto scaleFactor = squareSide / imageBounds.getWidth();
 
-        g.drawImageTransformed (rotarySliderImage, AffineTransform::scale (scaleFactor).translated (xTranslation + gap, yTranslation + gap)
+        g.drawImageTransformed (rotarySliderImage, juce::AffineTransform::scale (scaleFactor).translated (xTranslation + gap, yTranslation + gap)
                                                                    .rotated (toAngle, bounds.getCentreX(), bounds.getCentreY()));
 #endif
     }
