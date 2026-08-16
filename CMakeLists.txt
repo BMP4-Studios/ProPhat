@@ -54,6 +54,9 @@ set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded CACHE STRING "" FORCE)
 # For simplicity, the name of the CMake project is also the name of the target
 project(${PROJECT_NAME} VERSION ${CURRENT_VERSION})
 
+# Log build environment info (after project() so compiler info is available)
+#include(PamplejuceLog)
+
 # JUCE is setup as a submodule in the /JUCE folder
 # Locally, you must run `git submodule update --init --recursive` once
 # and later `git submodule update --remote --merge` to keep it up to date
@@ -62,6 +65,9 @@ add_subdirectory(JUCE)
 
 # Add CLAP format
 add_subdirectory(modules/clap-juce-extensions EXCLUDE_FROM_ALL)
+
+# Add any other modules you want modules here, before the juce_add_plugin call
+# juce_add_module(modules/my_module)
 
 # This adds the melatonin inspector module
 add_subdirectory (modules/melatonin_inspector)
@@ -168,6 +174,7 @@ target_link_libraries(SharedCode
     juce_gui_basics
     juce_gui_extra
     juce::juce_recommended_config_flags
+    juce::juce_recommended_lto_flags
     juce::juce_recommended_warning_flags)
 
 # Only enable LTO when not using sanitizers (rtsan conflicts with LTO)
