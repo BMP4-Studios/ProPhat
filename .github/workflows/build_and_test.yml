@@ -18,6 +18,9 @@ env:
   HOMEBREW_NO_INSTALL_CLEANUP: 1
   SCCACHE_GHA_ENABLED: true
   SCCACHE_CACHE_MULTIARCH: 1
+  # Flip to 'true' once the corresponding signing secrets are configured in repo settings.
+  ENABLE_MACOS_SIGNING: 'false'    # needs DEV_ID_*, DEVELOPER_ID_*, NOTARIZATION_*, TEAM_ID
+  ENABLE_WINDOWS_SIGNING: 'false'  # needs AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_ENDPOINT, AZURE_CODE_SIGNING_NAME, AZURE_CERT_PROFILE_NAME
 
 defaults:
   run:
@@ -115,26 +118,24 @@ jobs:
           7z x pluginval_${{ runner.os }}.zip
           ${{ matrix.pluginval-binary }} --strictness-level 10 --verbose --validate "${{ env.VST3_PATH }}"
 
-      # Apple codesigning disabled — re-enable once a Developer ID cert is available.
-      # - name: Import Certificates (macOS)
-      #   uses: sudara/basic-macos-keychain-action@v1
-      #   id: keychain
-      #   if: ${{ runner.os == 'macOS'}}
-      #   with:
-      #     dev-id-app-cert: ${{ secrets.DEV_ID_APP_CERT }}
-      #     dev-id-app-password: ${{ secrets.DEV_ID_APP_PASSWORD }}
-      #     dev-id-installer-cert: ${{ secrets.DEV_ID_INSTALLER_CERT }}
-      #     dev-id-installer-password: ${{ secrets.DEV_ID_INSTALLER_PASSWORD }}
-      #
-      # - name: Codesign (macOS)
-      #   if: ${{ runner.os == 'macOS' }}
-      #   timeout-minutes: 5
-      #   run: |
-      #     # Each plugin must be code signed
-      #     codesign --force --keychain ${{ steps.keychain.outputs.keychain-path }} -s "${{ secrets.DEVELOPER_ID_APPLICATION}}" -v "${{ env.VST3_PATH }}" --deep --strict --options=runtime --timestamp
-      #     codesign --force --keychain ${{ steps.keychain.outputs.keychain-path }} -s "${{ secrets.DEVELOPER_ID_APPLICATION}}" -v "${{ env.AU_PATH }}" --deep --strict --options=runtime --timestamp
-      #     codesign --force --keychain ${{ steps.keychain.outputs.keychain-path }} -s "${{ secrets.DEVELOPER_ID_APPLICATION}}" -v "${{ env.CLAP_PATH }}" --deep --strict --options=runtime --timestamp
-      #     codesign --force --keychain ${{ steps.keychain.outputs.keychain-path }} -s "${{ secrets.DEVELOPER_ID_APPLICATION}}" -v "${{ env.STANDALONE_PATH }}" --deep --strict --options=runtime --timestamp
+      - name: Import Certificates (macOS)
+        if: ${{ runner.os == 'macOS' && env.ENABLE_MACOS_SIGNING == 'true' }}
+        uses: sudara/basic-macos-keychain-action@v1
+        id: keychain
+        with:
+          dev-id-app-cert: ${{ secrets.DEV_ID_APP_CERT }}
+          dev-id-app-password: ${{ secrets.DEV_ID_APP_PASSWORD }}
+          dev-id-installer-cert: ${{ secrets.DEV_ID_INSTALLER_CERT }}
+          dev-id-installer-password: ${{ secrets.DEV_ID_INSTALLER_PASSWORD }}
+
+      - name: Codesign (macOS)
+        if: ${{ runner.os == 'macOS' && env.ENABLE_MACOS_SIGNING == 'true' }}
+        timeout-minutes: 5
+        run: |
+          codesign --force --keychain ${{ steps.keychain.outputs.keychain-path }} -s "${{ secrets.DEVELOPER_ID_APPLICATION }}" -v "${{ env.VST3_PATH }}"       --deep --strict --options=runtime --timestamp
+          codesign --force --keychain ${{ steps.keychain.outputs.keychain-path }} -s "${{ secrets.DEVELOPER_ID_APPLICATION }}" -v "${{ env.AU_PATH }}"         --deep --strict --options=runtime --timestamp
+          codesign --force --keychain ${{ steps.keychain.outputs.keychain-path }} -s "${{ secrets.DEVELOPER_ID_APPLICATION }}" -v "${{ env.CLAP_PATH }}"       --deep --strict --options=runtime --timestamp
+          codesign --force --keychain ${{ steps.keychain.outputs.keychain-path }} -s "${{ secrets.DEVELOPER_ID_APPLICATION }}" -v "${{ env.STANDALONE_PATH }}" --deep --strict --options=runtime --timestamp
 
       - name: Add Custom Icons (macOS)
         if: ${{ runner.os == 'macOS' }}
@@ -155,13 +156,14 @@ jobs:
           SetFile -a C "${{ env.AU_PATH }}"
           SetFile -a C "${{ env.CLAP_PATH }}"
 
-      - name: Build macOS Installer pkg (unsigned)
+      # Always builds an unsigned .pkg. When ENABLE_MACOS_SIGNING is on, the next step re-runs productbuild with --sign and notarizes.
+      - name: Build macOS Installer pkg
         if: ${{ runner.os == 'macOS' }}
         timeout-minutes: 5
         run: |
-          pkgbuild --identifier "${{ env.BUNDLE_ID }}.au.pkg" --version $VERSION --component "${{ env.AU_PATH }}" --install-location "/Library/Audio/Plug-Ins/Components"  "packaging/${{ env.PRODUCT_NAME }}.au.pkg"
-          pkgbuild --identifier "${{ env.BUNDLE_ID }}.vst3.pkg" --version $VERSION --component "${{ env.VST3_PATH }}" --install-location "/Library/Audio/Plug-Ins/VST3" "packaging/${{ env.PRODUCT_NAME }}.vst3.pkg"
-          pkgbuild --identifier "${{ env.BUNDLE_ID }}.clap.pkg" --version $VERSION --component "${{ env.CLAP_PATH }}" --install-location "/Library/Audio/Plug-Ins/CLAP" "packaging/${{ env.PRODUCT_NAME }}.clap.pkg"
+          pkgbuild --identifier "${{ env.BUNDLE_ID }}.au.pkg"   --version $VERSION --component "${{ env.AU_PATH }}"   --install-location "/Library/Audio/Plug-Ins/Components" "packaging/${{ env.PRODUCT_NAME }}.au.pkg"
+          pkgbuild --identifier "${{ env.BUNDLE_ID }}.vst3.pkg" --version $VERSION --component "${{ env.VST3_PATH }}" --install-location "/Library/Audio/Plug-Ins/VST3"       "packaging/${{ env.PRODUCT_NAME }}.vst3.pkg"
+          pkgbuild --identifier "${{ env.BUNDLE_ID }}.clap.pkg" --version $VERSION --component "${{ env.CLAP_PATH }}" --install-location "/Library/Audio/Plug-Ins/CLAP"       "packaging/${{ env.PRODUCT_NAME }}.clap.pkg"
 
           # Standalone is special, needs a boolean to always install in /Applications
           pkgbuild --analyze --root "$(dirname "${{ env.STANDALONE_PATH }}")" standalone.plist
@@ -170,19 +172,17 @@ jobs:
 
           cd packaging
           envsubst < distribution.xml.template > distribution.xml
-          # Unsigned pkg — skip --sign/--timestamp until Developer ID Installer cert is configured
           productbuild --resources ./resources --distribution distribution.xml "${{ env.ARTIFACT_NAME }}.pkg"
 
-      # Apple notarization disabled — re-enable once a Developer ID cert & Apple ID are available.
-      # - name: Notarize macOS Installer pkg
-      #   if: ${{ runner.os == 'macOS' }}
-      #   timeout-minutes: 5
-      #   run: |
-      #     cd packaging
-      #     # Re-sign with Developer ID Installer cert, then notarize and staple
-      #     productbuild --resources ./resources --distribution distribution.xml --sign "${{ secrets.DEVELOPER_ID_INSTALLER }}" --timestamp "${{ env.ARTIFACT_NAME }}.pkg"
-      #     xcrun notarytool submit "${{ env.ARTIFACT_NAME }}.pkg" --apple-id ${{ secrets.NOTARIZATION_USERNAME }} --password ${{ secrets.NOTARIZATION_PASSWORD }} --team-id ${{ secrets.TEAM_ID }} --wait
-      #     xcrun stapler staple "${{ env.ARTIFACT_NAME }}.pkg"
+      - name: Sign and notarize macOS Installer pkg
+        if: ${{ runner.os == 'macOS' && env.ENABLE_MACOS_SIGNING == 'true' }}
+        timeout-minutes: 5
+        run: |
+          cd packaging
+          # Re-build the pkg with --sign (overwrites the unsigned one), then notarize and staple.
+          productbuild --resources ./resources --distribution distribution.xml --sign "${{ secrets.DEVELOPER_ID_INSTALLER }}" --timestamp "${{ env.ARTIFACT_NAME }}.pkg"
+          xcrun notarytool submit "${{ env.ARTIFACT_NAME }}.pkg" --apple-id ${{ secrets.NOTARIZATION_USERNAME }} --password ${{ secrets.NOTARIZATION_PASSWORD }} --team-id ${{ secrets.TEAM_ID }} --wait
+          xcrun stapler staple "${{ env.ARTIFACT_NAME }}.pkg"
 
       - name: Zip
         if: ${{ runner.os == 'Linux' }}
@@ -195,19 +195,18 @@ jobs:
           iscc "packaging\installer.iss"
           mv "packaging/Output/${{ env.ARTIFACT_NAME }}.exe" "${{ env.ARTIFACTS_PATH }}/"
 
-      # Azure Trusted Signing disabled — re-enable once an Azure Code Signing account is available.
-      # - name: Codesign with Azure Trusted Signing
-      #   if: ${{ runner.os == 'Windows' }}
-      #   uses: azure/artifact-signing-action@v1
-      #   with:
-      #     azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-      #     azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-      #     azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-      #     endpoint: ${{ secrets.AZURE_ENDPOINT }}
-      #     signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
-      #     certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
-      #     files-folder: ${{ env.ARTIFACTS_PATH }}
-      #     files-folder-filter: exe
+      - name: Codesign with Azure Trusted Signing
+        if: ${{ runner.os == 'Windows' && env.ENABLE_WINDOWS_SIGNING == 'true' }}
+        uses: azure/artifact-signing-action@v1
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_ENDPOINT }}
+          signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
+          files-folder: ${{ env.ARTIFACTS_PATH }}
+          files-folder-filter: exe
 
       - name: Upload Exe (Windows)
         if: ${{ runner.os == 'Windows' }}
@@ -385,7 +384,7 @@ jobs:
           files-changed-only: false
           # Only post a summary comment on PRs
           thread-comments: ${{ github.event_name == 'pull_request' }}
-          tidy-review: true
+          tidy-review: false
           step-summary: true
           extensions: cpp,h
           # We only want tidy to look at our own source tree (source/, tests/, benchmarks/).
@@ -404,6 +403,8 @@ jobs:
     if: contains(github.ref, 'tags/v')
     runs-on: ubuntu-latest
     needs: build_and_test
+    permissions:
+      contents: write   # softprops/action-gh-release needs this to create the release
 
     steps:
       - name: Get Artifacts

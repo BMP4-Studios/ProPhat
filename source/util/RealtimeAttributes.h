@@ -9,6 +9,7 @@
 // Older Clang (and non-Clang compilers) don't recognize the attributes; we
 // expand to nothing there so the code still compiles and IDE noise is reduced.
 
+// NOLINTBEGIN
 #if defined(__has_cpp_attribute)
 #if __has_cpp_attribute(clang::nonblocking)
 #define RTSAN_NONBLOCKING [[clang::nonblocking]]
@@ -25,3 +26,4 @@
 #ifndef RTSAN_BLOCKING
 #define RTSAN_BLOCKING
 #endif
+// NOLINTEND

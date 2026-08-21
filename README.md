@@ -38,6 +38,13 @@ Shortcut: editor-wide case-aware find-and-replace of `Starty` → `Spangle` and 
 brew install cmake ninja clang-format          # Homebrew: https://brew.sh
 ```
 
+## clang-tidy
+Install LLVM and clang-tidy:
+- Open your Terminal and install the full LLVM package using Homebrew: `brew install llvm`
+- Restart your terminal or reload your shell profile to apply changes
+- Configure it with cmake: `cmake -B ./Builds -S . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`
+- Run it: `/opt/homebrew/Cellar/llvm/21.1.4/bin/run-clang-tidy -p ./Builds`
+
 ### Linux (Ubuntu / Debian)
 ```bash
 sudo apt update
@@ -97,6 +104,25 @@ Every push and PR triggers:
 - `clang-tidy` — posts review comments on PRs
 
 `nightly.yml` runs the same fan-out daily at 10:00 UTC, to catch external drift (JUCE submodule on `develop`, apt packages, GitHub runner images) between commits. Disable by commenting out the `schedule:` block in that file if you don't want the daily runs.
+
+## Releasing
+Releases are tag-driven. The `release` job in `build_and_test.yml` is gated on `contains(github.ref, 'tags/v')` and uses `softprops/action-gh-release` to publish build artifacts (`.exe`, `.zip`, `.pkg`) as a GitHub prerelease.
+
+If your repo blocks direct pushes to `main`, do the version bump through a PR; otherwise you can push directly.
+
+To cut a release:
+1. On a release branch, update the `VERSION` file in the repo root (e.g. `0.1.0`).
+2. Open a PR against `main` and get it merged (or push directly if your repo allows it).
+3. Pull the merged commit locally, then tag it with a `v`-prefixed tag matching the version and push the tag:
+   ```bash
+   git checkout main
+   git pull
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+4. CI runs the full matrix on the tag, then the `release` job picks up the artifacts and publishes a draft prerelease on GitHub. Open the Releases page, fill in the description, flip the prerelease flag off if it's a real release, and publish.
+
+The `v` prefix is required; a bare `0.1.0` tag won't trigger the release job.
 
 ## License
 Starty is released under the [GNU Affero General Public License, version 3](LICENSE) (AGPLv3). Copyright (C) 2026 Vincent Berthiaume.

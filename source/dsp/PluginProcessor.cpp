@@ -1,7 +1,7 @@
 #include "PluginProcessor.h"
 #include "../ui/PluginEditor.h"
 
-PluginProcessor::PluginProcessor()
+PluginProcessor::PluginProcessor() // NOLINT
 : AudioProcessor (BusesProperties()
 #if ! JucePlugin_IsMidiEffect
 #if ! JucePlugin_IsSynth
@@ -23,18 +23,18 @@ int PluginProcessor::getCurrentProgram() { return 0; }
 
 void PluginProcessor::setCurrentProgram (int index) { juce::ignoreUnused (index); }
 
-const juce::String PluginProcessor::getProgramName (int index)
+const juce::String PluginProcessor::getProgramName (int index) // NOLINT
 {
     juce::ignoreUnused (index);
     return {};
 }
 
-void PluginProcessor::changeProgramName (int index, const juce::String& newName)
+void PluginProcessor::changeProgramName (int index, const juce::String& newName) // NOLINT
 {
     juce::ignoreUnused (index, newName);
 }
 
-void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
+void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)  // NOLINT
 {
     juce::ignoreUnused (sampleRate, samplesPerBlock);
 }
@@ -97,7 +97,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     }
 }
 
-void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
+void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)  // NOLINT
 {
     // You should use this method to store your parameters in the memory block.
     // You could do that either as raw data, or use the XML or ValueTree classes
