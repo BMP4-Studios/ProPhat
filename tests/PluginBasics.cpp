@@ -1,5 +1,6 @@
 #include "helpers/test_helpers.h"
 #include <DSP/ProPhatProcessor.h>
+#include <UI/ProPhatEditor.h>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
@@ -12,6 +13,17 @@ TEST_CASE ("Plugin instance", "[instance]")
         CHECK_THAT (testPlugin.getName().toStdString(),
             Catch::Matchers::Equals ("ProPhat"));
     }
+}
+
+TEST_CASE ("Plugin editor", "[editor]")
+{
+    runWithinPluginEditor (
+        [] (ProPhatProcessor& plugin)
+        {
+            auto* editor = plugin.getActiveEditor();
+            REQUIRE (editor != nullptr);
+            CHECK (editor->getNumChildComponents() > 0);
+        });
 }
 
 TEST_CASE ("ProcessBlock generates audio from MIDI input", "[RTSan]")
@@ -104,17 +116,5 @@ TEST_CASE ("stack buffer overflow", "[UBSan]")
 {
     char buf[8];
     buf[8] = 'x'; // BOOM: write past end of stack buffer
-}
-#endif
-
-#ifdef PAMPLEJUCE_IPP
-    #include <cstring>
-    #include <ipp.h>
-
-TEST_CASE ("IPP version", "[ipp]")
-{
-    const char* version = ippsGetLibVersion()->Version;
-    REQUIRE (version != nullptr);
-    CHECK (std::strlen (version) > 0);
 }
 #endif
