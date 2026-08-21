@@ -1,0 +1,17 @@
+Checks: >
+  -*,
+  bugprone-*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  cppcoreguidelines-*,
+  -modernize-use-trailing-return-type,
+  -readability-magic-numbers,
+  -readability-braces-around-statements,
+  -readability-identifier-length,
+  -readability-uppercase-literal-suffix,
+  -readability-named-parameters,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -readability-math-missing-parentheses
+HeaderFilterRegex: '(source|tests|benchmarks)/.*'
+FormatStyle: file

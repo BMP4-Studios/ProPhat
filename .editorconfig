@@ -1,0 +1,26 @@
+# EditorConfig — https://editorconfig.org
+# Sets editor defaults for editors that don't read .clang-format.
+# C/C++ formatting is governed by .clang-format; this just covers everything else
+# (CMake, YAML, Markdown, etc.) and provides safe fallbacks where the two overlap.
+
+root = true
+
+[*]
+charset                  = utf-8
+end_of_line              = lf
+insert_final_newline     = true
+trim_trailing_whitespace = true
+indent_style             = space
+indent_size              = 4
+
+# Markdown is whitespace-sensitive (trailing two spaces = hard line break).
+[*.md]
+trim_trailing_whitespace = false
+
+# YAML conventionally uses 2-space indent.
+[*.{yml,yaml}]
+indent_size              = 2
+
+# Same for JSON.
+[*.json]
+indent_size              = 2

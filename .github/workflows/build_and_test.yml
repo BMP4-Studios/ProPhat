@@ -2,6 +2,7 @@ name: ProPhat
 
 on:
   workflow_dispatch: # lets you run a build from the UI
+  workflow_call: # lets other workflows (like nightly.yml) call this one
   push:
   pull_request:
 
@@ -17,23 +18,21 @@ env:
   HOMEBREW_NO_INSTALL_CLEANUP: 1
   SCCACHE_GHA_ENABLED: true
   SCCACHE_CACHE_MULTIARCH: 1
-  SCCACHE_IDLE_TIMEOUT: 0
+  # Flip to 'true' once the corresponding signing secrets are configured in repo settings.
+  ENABLE_MACOS_SIGNING: 'false'    # needs DEV_ID_*, DEVELOPER_ID_*, NOTARIZATION_*, TEAM_ID
+  ENABLE_WINDOWS_SIGNING: 'false'  # needs AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_ENDPOINT, AZURE_CODE_SIGNING_NAME, AZURE_CERT_PROFILE_NAME
 
 defaults:
   run:
     shell: bash
 
-# jobs are run in parallel on different machines
-# all steps run in series
+# jobs are run in parallel on different machines; all steps run in series
 jobs:
   build_and_test:
     # don't double run on PRs
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    # we only have a container if we are using the rtsan build
-    container:
-      image: ${{ matrix.image || '' }}
     strategy:
       fail-fast: false # show all errors for each platform (vs. cancel jobs on error)
       matrix:
@@ -41,7 +40,6 @@ jobs:
           - name: Linux
             os: ubuntu-latest
             pluginval-binary: ./pluginval
-
           - name: macOS
             os: macos-latest
             pluginval-binary: pluginval.app/Contents/MacOS/pluginval
@@ -51,68 +49,14 @@ jobs:
             os: windows-latest
             pluginval-binary: ./pluginval.exe
 
-          - name: Linux (Clang-20 RealtimeSanitizer)
-            os: ubuntu-latest
-            extra-flags: -G"Ninja Multi-Config"
-              -DCMAKE_C_COMPILER=clang-20
-              -DCMAKE_CXX_COMPILER=clang++
-              -DCMAKE_C_FLAGS="-fsanitize=realtime"
-              -DCMAKE_CXX_FLAGS="-fsanitize=realtime"
-              -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=realtime"
-              -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=realtime"
-            image: ghcr.io/guillaumeriousat/algogris-rtsan:latest
-
-          - name: Linux (ThreadSanitizer)
-            os: ubuntu-latest
-            extra-flags: -G"Ninja Multi-Config"
-              -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer -g"
-              -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer -g"
-              -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
-              -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
-
-          - name: Linux (AddressSanitizer)
-            os: ubuntu-latest
-            extra-flags: -G"Ninja Multi-Config"
-              -DCMAKE_C_FLAGS="-fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -g"
-              -DCMAKE_CXX_FLAGS="-fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -g"
-              -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address -fsanitize=undefined"
-              -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address -fsanitize=undefined"
-            env:
-              UBSAN_OPTIONS: "halt_on_error=1:abort_on_error=1"
-
-          - name: Linux (UndefinedBehaviorSanitizer)
-            os: ubuntu-latest
-            extra-flags: -G"Ninja Multi-Config"
-              -DCMAKE_C_FLAGS="-fsanitize=undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -g"
-              -DCMAKE_CXX_FLAGS="-fsanitize=undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -g"
-              -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=undefined"
-              -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=undefined"
-
     steps:
       # Setup MSVC toolchain and developer command prompt (Windows)
       - uses: ilammy/msvc-dev-cmd@v1
 
       # Use clang on Linux so we don't introduce a 3rd compiler (Windows and macOS use MSVC and Clang)
       - name: Set up Clang
-        if: runner.os == 'Linux' && matrix.image == ''
+        if: runner.os == 'Linux'
         uses: egor-tensin/setup-clang@v2
-
-      # This also starts up our "fake" display (Xvfb), needed for pluginval
-      - name: Install JUCE's Linux Deps
-        if: runner.os == 'Linux' && matrix.image == ''
-        # Thanks to McMartin & co https://forum.juce.com/t/list-of-juce-dependencies-under-linux/15121/44
-        run: |
-          # IPP stuff
-          wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
-          echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
-          
-          sudo apt-get update && sudo apt install libasound2-dev libx11-dev libxinerama-dev libxext-dev libfreetype6-dev libwebkit2gtk-4.1-dev libglu1-mesa-dev xvfb ninja-build intel-oneapi-ipp-devel
-          sudo /usr/bin/Xvfb $DISPLAY & 
-
-      - name: Install IPP (Windows)
-        if: (runner.os == 'Windows')
-        run: |
-          nuget install intelipp.static.win-x64 -Version 2022.3.0.387
 
       - name: Install Ninja (Windows)
         if: runner.os == 'Windows'
@@ -127,27 +71,38 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/install-linux-deps
+        with:
+          start-xvfb: 'true'
+
       - name: Cache the build
         uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Configure
-        run: cmake -B ${{ env.BUILD_DIR }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE}} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache ${{ matrix.extra-flags }} .
+        run: >-
+          cmake -B ${{ env.BUILD_DIR }}
+          -G Ninja
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          -DCMAKE_C_COMPILER_LAUNCHER=sccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+          ${{ matrix.extra-flags }}
+          .
 
       - name: Build
         run: cmake --build ${{ env.BUILD_DIR }} --config ${{ env.BUILD_TYPE }}
 
       - name: Test & Benchmarks
         working-directory: ${{ env.BUILD_DIR }}
-        run: ctest --output-on-failure --verbose -C ${{ env.BUILD_TYPE }}
+        run: ctest --verbose --output-on-failure
 
       - name: Read in .env from CMake # see GitHubENV.cmake
-        if: ${{ ! matrix.pluginval-binary == '' }}
         run: |
           cat .env # show us the config
           cat .env >> $GITHUB_ENV # pull in our PRODUCT_NAME, etc
 
       - name: Set additional env vars for next steps
-        if: ${{ ! matrix.pluginval-binary == '' }}
         run: |
           ARTIFACTS_PATH=${{ env.BUILD_DIR }}/${{ env.PROJECT_NAME }}_artefacts/${{ env.BUILD_TYPE }}
           echo "ARTIFACTS_PATH=$ARTIFACTS_PATH" >> $GITHUB_ENV
@@ -156,34 +111,32 @@ jobs:
           echo "AUV3_PATH=$ARTIFACTS_PATH/AUv3/${{ env.PRODUCT_NAME }}.appex" >> $GITHUB_ENV
           echo "CLAP_PATH=$ARTIFACTS_PATH/CLAP/${{ env.PRODUCT_NAME }}.clap" >> $GITHUB_ENV
           echo "STANDALONE_PATH=$ARTIFACTS_PATH/Standalone/${{ env.PRODUCT_NAME }}.app" >> $GITHUB_ENV
-          echo "ARTIFACT_NAME=${{ env.PRODUCT_NAME }}-${{ env.VERSION }}-${{ matrix.name }}" >> $GITHUB_ENV
+          echo "ARTIFACT_NAME=${{ env.PRODUCT_NAME }}-${{ env.VERSION }}-${{ runner.os }}" >> $GITHUB_ENV
 
       - name: Pluginval
-        if: ${{ ! matrix.pluginval-binary == '' }}
         run: |
           curl -LO "https://github.com/Tracktion/pluginval/releases/download/v1.0.3/pluginval_${{ runner.os }}.zip"
           7z x pluginval_${{ runner.os }}.zip
           ${{ matrix.pluginval-binary }} --strictness-level 10 --verbose --validate "${{ env.VST3_PATH }}"
 
-#      - name: Import Certificates (macOS)
-#        uses: sudara/basic-macos-keychain-action@v1
-#        id: keychain
-#        if: ${{ runner.os == 'macOS'}}
-#        with:
-#          dev-id-app-cert: ${{ secrets.DEV_ID_APP_CERT }}
-#          dev-id-app-password: ${{ secrets.DEV_ID_APP_PASSWORD }}
-#          dev-id-installer-cert: ${{ secrets.DEV_ID_INSTALLER_CERT }}
-#          dev-id-installer-password: ${{ secrets.DEV_ID_INSTALLER_PASSWORD }}
+      - name: Import Certificates (macOS)
+        if: ${{ runner.os == 'macOS' && env.ENABLE_MACOS_SIGNING == 'true' }}
+        uses: sudara/basic-macos-keychain-action@v1
+        id: keychain
+        with:
+          dev-id-app-cert: ${{ secrets.DEV_ID_APP_CERT }}
+          dev-id-app-password: ${{ secrets.DEV_ID_APP_PASSWORD }}
+          dev-id-installer-cert: ${{ secrets.DEV_ID_INSTALLER_CERT }}
+          dev-id-installer-password: ${{ secrets.DEV_ID_INSTALLER_PASSWORD }}
 
-      # - name: Codesign (macOS)
-      #   if: ${{ runner.os == 'macOS' }}
-      #   timeout-minutes: 5
-      #   run: |
-      #     # Each plugin must be code signed
-      #     codesign --force --keychain ${{ steps.keychain.outputs.keychain-path }} -s "${{ secrets.DEVELOPER_ID_APPLICATION}}" -v "${{ env.VST3_PATH }}" --deep --strict --options=runtime --timestamp
-      #     codesign --force --keychain ${{ steps.keychain.outputs.keychain-path }} -s "${{ secrets.DEVELOPER_ID_APPLICATION}}" -v "${{ env.AU_PATH }}" --deep --strict --options=runtime --timestamp
-      #     codesign --force --keychain ${{ steps.keychain.outputs.keychain-path }} -s "${{ secrets.DEVELOPER_ID_APPLICATION}}" -v "${{ env.CLAP_PATH }}" --deep --strict --options=runtime --timestamp
-      #     codesign --force --keychain ${{ steps.keychain.outputs.keychain-path }} -s "${{ secrets.DEVELOPER_ID_APPLICATION}}" -v "${{ env.STANDALONE_PATH }}" --deep --strict --options=runtime --timestamp
+      - name: Codesign (macOS)
+        if: ${{ runner.os == 'macOS' && env.ENABLE_MACOS_SIGNING == 'true' }}
+        timeout-minutes: 5
+        run: |
+          codesign --force --keychain ${{ steps.keychain.outputs.keychain-path }} -s "${{ secrets.DEVELOPER_ID_APPLICATION }}" -v "${{ env.VST3_PATH }}"       --deep --strict --options=runtime --timestamp
+          codesign --force --keychain ${{ steps.keychain.outputs.keychain-path }} -s "${{ secrets.DEVELOPER_ID_APPLICATION }}" -v "${{ env.AU_PATH }}"         --deep --strict --options=runtime --timestamp
+          codesign --force --keychain ${{ steps.keychain.outputs.keychain-path }} -s "${{ secrets.DEVELOPER_ID_APPLICATION }}" -v "${{ env.CLAP_PATH }}"       --deep --strict --options=runtime --timestamp
+          codesign --force --keychain ${{ steps.keychain.outputs.keychain-path }} -s "${{ secrets.DEVELOPER_ID_APPLICATION }}" -v "${{ env.STANDALONE_PATH }}" --deep --strict --options=runtime --timestamp
 
       - name: Add Custom Icons (macOS)
         if: ${{ runner.os == 'macOS' }}
@@ -201,28 +154,36 @@ jobs:
           SetFile -a C "${{ env.AU_PATH }}"
           SetFile -a C "${{ env.CLAP_PATH }}"
 
-#      - name: pkgbuild, Productbuild and Notarize
-#        if: ${{ runner.os == 'macOS' }}
-#        timeout-minutes: 5
-#        run: |
-#          pkgbuild --identifier "${{ env.BUNDLE_ID }}.au.pkg" --version $VERSION --component "${{ env.AU_PATH }}" --install-location "/Library/Audio/Plug-Ins/Components"  "packaging/${{ env.PRODUCT_NAME }}.au.pkg"
-#          pkgbuild --identifier "${{ env.BUNDLE_ID }}.vst3.pkg" --version $VERSION --component "${{ env.VST3_PATH }}" --install-location "/Library/Audio/Plug-Ins/VST3" "packaging/${{ env.PRODUCT_NAME }}.vst3.pkg"
-#          pkgbuild --identifier "${{ env.BUNDLE_ID }}.clap.pkg" --version $VERSION --component "${{ env.CLAP_PATH }}" --install-location "/Library/Audio/Plug-Ins/CLAP" "packaging/${{ env.PRODUCT_NAME }}.clap.pkg"
-#
-#          # Standalone is special, needs a boolean to always install in /Applications
-#          pkgbuild --analyze --root "$(dirname "${{ env.STANDALONE_PATH }}")" standalone.plist
-#          plutil -replace BundleIsRelocatable -bool NO standalone.plist
-#          pkgbuild --identifier "${{ env.BUNDLE_ID }}.app.pkg" --version $VERSION --root "$(dirname "${{ env.STANDALONE_PATH }}")" --component-plist standalone.plist --install-location "/Applications" "packaging/${{ env.PRODUCT_NAME }}.app.pkg"
-#
-#          cd packaging
-#          envsubst < distribution.xml.template > distribution.xml
-#          productbuild --resources ./resources --distribution distribution.xml --sign "${{ secrets.DEVELOPER_ID_INSTALLER }}" --timestamp "${{ env.ARTIFACT_NAME }}.pkg"
-#
-#          xcrun notarytool submit "${{ env.ARTIFACT_NAME }}.pkg" --apple-id ${{ secrets.NOTARIZATION_USERNAME }} --password ${{ secrets.NOTARIZATION_PASSWORD }} --team-id ${{ secrets.TEAM_ID }} --wait
-#          xcrun stapler staple "${{ env.ARTIFACT_NAME }}.pkg"
+      # Always builds an unsigned .pkg. When ENABLE_MACOS_SIGNING is on, the next step re-runs productbuild with --sign and notarizes.
+      - name: Build macOS Installer pkg
+        if: ${{ runner.os == 'macOS' }}
+        timeout-minutes: 5
+        run: |
+          pkgbuild --identifier "${{ env.BUNDLE_ID }}.au.pkg"   --version $VERSION --component "${{ env.AU_PATH }}"   --install-location "/Library/Audio/Plug-Ins/Components" "packaging/${{ env.PRODUCT_NAME }}.au.pkg"
+          pkgbuild --identifier "${{ env.BUNDLE_ID }}.vst3.pkg" --version $VERSION --component "${{ env.VST3_PATH }}" --install-location "/Library/Audio/Plug-Ins/VST3"       "packaging/${{ env.PRODUCT_NAME }}.vst3.pkg"
+          pkgbuild --identifier "${{ env.BUNDLE_ID }}.clap.pkg" --version $VERSION --component "${{ env.CLAP_PATH }}" --install-location "/Library/Audio/Plug-Ins/CLAP"       "packaging/${{ env.PRODUCT_NAME }}.clap.pkg"
+
+          # Standalone is special, needs a boolean to always install in /Applications
+          pkgbuild --analyze --root "$(dirname "${{ env.STANDALONE_PATH }}")" standalone.plist
+          plutil -replace BundleIsRelocatable -bool NO standalone.plist
+          pkgbuild --identifier "${{ env.BUNDLE_ID }}.app.pkg" --version $VERSION --root "$(dirname "${{ env.STANDALONE_PATH }}")" --component-plist standalone.plist --install-location "/Applications" "packaging/${{ env.PRODUCT_NAME }}.app.pkg"
+
+          cd packaging
+          envsubst < distribution.xml.template > distribution.xml
+          productbuild --resources ./resources --distribution distribution.xml "${{ env.ARTIFACT_NAME }}.pkg"
+
+      - name: Sign and notarize macOS Installer pkg
+        if: ${{ runner.os == 'macOS' && env.ENABLE_MACOS_SIGNING == 'true' }}
+        timeout-minutes: 5
+        run: |
+          cd packaging
+          # Re-build the pkg with --sign (overwrites the unsigned one), then notarize and staple.
+          productbuild --resources ./resources --distribution distribution.xml --sign "${{ secrets.DEVELOPER_ID_INSTALLER }}" --timestamp "${{ env.ARTIFACT_NAME }}.pkg"
+          xcrun notarytool submit "${{ env.ARTIFACT_NAME }}.pkg" --apple-id ${{ secrets.NOTARIZATION_USERNAME }} --password ${{ secrets.NOTARIZATION_PASSWORD }} --team-id ${{ secrets.TEAM_ID }} --wait
+          xcrun stapler staple "${{ env.ARTIFACT_NAME }}.pkg"
 
       - name: Zip
-        if: ${{ matrix.name == 'Linux' }}
+        if: ${{ runner.os == 'Linux' }}
         working-directory: ${{ env.ARTIFACTS_PATH }}
         run: 7z a -tzip "${{ env.ARTIFACT_NAME }}.zip" "-xr!lib${{ env.PRODUCT_NAME }}_SharedCode.a" .
 
@@ -232,31 +193,18 @@ jobs:
           iscc "packaging\installer.iss"
           mv "packaging/Output/${{ env.ARTIFACT_NAME }}.exe" "${{ env.ARTIFACTS_PATH }}/"
 
-      # - name: Codesign with Azure Trusted Signing
-      #   if: ${{ runner.os == 'Windows' }}
-      #   uses: azure/trusted-signing-action@v0.5.11
-      #   with:
-      #     # The Azure Active Directory tenant (directory) ID.
-      #     azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-
-      #     # The client (application) ID of an App Registration in the tenant.
-      #     azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-
-      #     # A client secret that was generated for the App Registration.
-      #     azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-
-      #     # The Code Signing Account endpoint. The URI value must have a URI that aligns to the region your Code Signing Account and Certificate Profile you are specifying were created in during the setup of these resources.
-      #     endpoint: ${{ secrets.AZURE_ENDPOINT }}
-
-      #     # The Code Signing Account name.
-      #     trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
-
-      #     # The Certificate Profile name.
-      #     certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
-
-      #     # This signs all exes inside the folder
-      #     files-folder: ${{ env.ARTIFACTS_PATH }}
-      #     files-folder-filter: exe
+      - name: Codesign with Azure Trusted Signing
+        if: ${{ runner.os == 'Windows' && env.ENABLE_WINDOWS_SIGNING == 'true' }}
+        uses: azure/artifact-signing-action@v1
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_ENDPOINT }}
+          signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
+          files-folder: ${{ env.ARTIFACTS_PATH }}
+          files-folder-filter: exe
 
       - name: Upload Exe (Windows)
         if: ${{ runner.os == 'Windows' }}
@@ -279,10 +227,182 @@ jobs:
           name: ${{ env.ARTIFACT_NAME }}.pkg
           path: packaging/${{ env.ARTIFACT_NAME }}.pkg
 
+  # The instrumented tests (sanitizer or coverage) build *only* the Tests target (via cmake --build --target Tests)
+  instrumented_tests:
+    # don't double run on PRs (same logic as build_and_test above)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ASan and RTSan need lld (gold mishandles their LTO sections — drops asan.module_ctor); UBSan and TSan use the default linker.
+          - name: AddressSanitizer
+            c_flags:      "-fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -g"
+            linker_flags: "-fsanitize=address -fsanitize=undefined -fuse-ld=lld"
+
+          - name: UndefinedBehaviorSanitizer
+            c_flags:      "-fsanitize=undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -g"
+            linker_flags: "-fsanitize=undefined"
+
+          - name: ThreadSanitizer
+            c_flags:      "-fsanitize=thread -fno-omit-frame-pointer -g"
+            linker_flags: "-fsanitize=thread"
+
+          - name: RealtimeSanitizer
+            cc:           clang-20
+            cxx:          clang++-20
+            c_flags:      "-fsanitize=realtime"
+            linker_flags: "-fsanitize=realtime -fuse-ld=lld-20"
+
+          # Coverage uses Clang's gcov-compatible --coverage instrumentation, scoped to SharedCode INTERFACE via
+          # -DENABLE_COVERAGE=ON so Catch2 / JUCE / other deps don't get instrumented.
+          - name: Coverage
+            build_type:   Debug
+            cmake_flags:  "-DENABLE_COVERAGE=ON"
+
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    env:
+      UBSAN_OPTIONS: "halt_on_error=1:abort_on_error=1"
+      CC:  ${{ matrix.cc  || 'clang' }}
+      CXX: ${{ matrix.cxx || 'clang++' }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      # Ubuntu's default clang (18) for ASan/UBSan/TSan. RTSan needs a newer compiler, handled below.
+      - name: Set up Clang
+        if: matrix.name != 'RealtimeSanitizer'
+        uses: egor-tensin/setup-clang@v2
+
+      # RTSan requires Clang 20+ and a matching lld (apt's lld 18 can't read bitcode produced by clang-20 under LTO).
+      # apt.llvm.org's llvm.sh installs clang/lld/etc. for a pinned LLVM version from the upstream apt repo.
+      - name: Install Clang 20 + lld 20 (RTSan)
+        if: matrix.name == 'RealtimeSanitizer'
+        run: |
+          wget -qO llvm.sh https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 20
+          sudo apt-get install -y clang-20 lld-20
+
+      - name: Install Linux dependencies
+        uses: ./.github/actions/install-linux-deps
+
+      - name: Install gcovr
+        if: matrix.name == 'Coverage'
+        run: |
+          pipx install gcovr
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Configure
+        run: >-
+          cmake -B ${{ env.BUILD_DIR }}
+          -G Ninja
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type || 'Release' }}
+          -DCMAKE_C_FLAGS="${{ matrix.c_flags }}"
+          -DCMAKE_CXX_FLAGS="${{ matrix.c_flags }}"
+          -DCMAKE_EXE_LINKER_FLAGS="${{ matrix.linker_flags }}"
+          -DCMAKE_SHARED_LINKER_FLAGS="${{ matrix.linker_flags }}"
+          ${{ matrix.cmake_flags }}
+
+      - name: Build
+        run: cmake --build ${{ env.BUILD_DIR }} --target Tests
+
+      # Benchmarks.cmake's catch_discover_tests(Benchmarks) registers a "<name>_NOT_BUILT-<hash>" placeholder test
+      # whenever the Benchmarks binary is missing. We deliberately skip building Benchmarks here (sanitizers are too
+      # slow to instrument; coverage doesn't need them) so we filter that placeholder out of the ctest run.
+      - name: Test
+        run: ctest --test-dir ${{ env.BUILD_DIR }} --output-on-failure --verbose -E NOT_BUILT
+
+      # Coverage-only: gcovr emits an HTML report (uploaded as an artifact for drill-down) plus a plain-text summary
+      # that we paste into the run's Step Summary for at-a-glance numbers.
+      - name: Generate coverage report
+        if: matrix.name == 'Coverage'
+        run: |
+          mkdir -p coverage-html
+          gcovr --root . \
+            --gcov-executable "llvm-cov gcov" \
+            --gcov-ignore-errors=no_working_dir_found \
+            --filter 'source/' \
+            --html-details coverage-html/index.html \
+            --txt coverage.txt \
+            --print-summary
+          {
+            echo "## Coverage"
+            echo ''
+            echo '```'
+            cat coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage HTML
+        if: matrix.name == 'Coverage'
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-html
+          path: coverage-html/
+
+  clang-tidy:
+    name: clang-tidy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write   # needed to post PR review comments
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0     # cpp-linter needs history to diff changed files
+
+      - name: Install Linux dependencies
+        uses: ./.github/actions/install-linux-deps
+
+      - name: Configure
+        run: >-
+          cmake -B ${{ env.BUILD_DIR }}
+          -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Build
+        run: cmake --build ${{ env.BUILD_DIR }} -j
+
+      # cpp-linter runs clang-tidy and posts findings as PR review comments and step summaries
+      - uses: cpp-linter/cpp-linter-action@v2
+        id: linter
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          style: ''                  # don't run clang-format
+          tidy-checks: ''            # use project .clang-tidy
+          database: ${{ env.BUILD_DIR }}
+          files-changed-only: false
+          # Only post a summary comment on PRs
+          thread-comments: ${{ github.event_name == 'pull_request' }}
+          tidy-review: false
+          step-summary: true
+          extensions: cpp,h
+          # We only want tidy to look at our own source tree (source/, tests/, benchmarks/).
+          # Benchmarks.cpp is #included into Catch2Main.cpp and covered there.
+          ignore: '${{ env.BUILD_DIR }}|JUCE|modules|cmake|.github|benchmarks/Benchmarks.cpp'
+
+      # Step exits with code 1 when tidy finds anything, but continue-on-error keeps the job green
+      - name: Fail on tidy issues
+        if: steps.linter.outputs.checks-failed > 0
+        continue-on-error: true
+        run: |
+          echo "clang-tidy reported issues — see PR comments / step summary."
+          exit 1
+
   release:
     if: contains(github.ref, 'tags/v')
     runs-on: ubuntu-latest
     needs: build_and_test
+    permissions:
+      contents: write   # softprops/action-gh-release needs this to create the release
 
     steps:
       - name: Get Artifacts
@@ -292,9 +412,8 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           prerelease: true
-          # download-artifact puts these files in their own dirs...
-          # Using globs sidesteps having to pass the version around
+          # download-artifact puts these files in their own dirs; Using globs sidesteps having to pass the version around
           files: |
             */*.exe
             */*.zip
-            */*.dmg
+            */*.pkg

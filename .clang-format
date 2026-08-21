@@ -6,9 +6,9 @@ AlignEscapedNewlinesLeft: 'true'
 AlignOperands: true
 AlignTrailingComments: true
 AllowAllParametersOfDeclarationOnNextLine: 'false'
-AllowShortBlocksOnASingleLine: 'true'
+AllowShortBlocksOnASingleLine: 'false'
 AllowShortCaseLabelsOnASingleLine: 'true'
-AllowShortFunctionsOnASingleLine: Inline
+AllowShortFunctionsOnASingleLine: All
 AllowShortIfStatementsOnASingleLine: 'false'
 AllowShortLoopsOnASingleLine: 'false'
 AlwaysBreakAfterDefinitionReturnType: None
@@ -18,7 +18,7 @@ AlwaysBreakTemplateDeclarations: 'true'
 BinPackArguments: 'false'
 BinPackParameters: 'false'
 BreakConstructorInitializersBeforeComma: 'false'
-ColumnLimit: '0'
+ColumnLimit: '120'
 ConstructorInitializerAllOnOneLineOrOnePerLine: 'true'
 ConstructorInitializerIndentWidth: '0'
 Cpp11BracedListStyle: 'false'
@@ -46,8 +46,7 @@ Standard: Cpp11
 UseTab: Never
 TabWidth: 4
 SortIncludes: false
-AccessModifierOffset: -2
-
+AccessModifierOffset: -4
 BraceWrapping:
   AfterClass:      true
   AfterControlStatement: true

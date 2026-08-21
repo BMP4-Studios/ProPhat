@@ -1,0 +1,23 @@
+# Line-ending policy. Forces LF in the repo regardless of contributors'
+# core.autocrlf settings, so Windows clones don't end up with CRLF in source
+# files. Pairs with .editorconfig's end_of_line = lf.
+
+* text=auto eol=lf
+
+# Windows shell scripts must use CRLF or cmd.exe misparses them.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets — never normalize.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.icns binary
+*.pdf  binary
+*.zip  binary
+*.wav  binary
+*.aiff binary
+*.flac binary
+*.ogg  binary

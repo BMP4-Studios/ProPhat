@@ -42,31 +42,55 @@ public:
 #else
         const auto factor { .8f };
 #endif
-        return fonts->getRegularFont (juce::jmin (static_cast<float> (Constants::labelFontHeight), static_cast<float>(buttonHeight) * factor));
+        return fonts->getRegularFont (
+            juce::jmin (static_cast<float> (Constants::labelFontHeight), static_cast<float> (buttonHeight) * factor));
     }
 
     void drawCornerResizer (juce::Graphics&, int, int, bool, bool) override {}
 
-    void drawButtonBackground (juce::Graphics& g, juce::Button& button, const juce::Colour& backgroundColour,
-                               bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
+    void drawButtonBackground (juce::Graphics&     g,
+                               juce::Button&       button,
+                               const juce::Colour& backgroundColour,
+                               bool                shouldDrawButtonAsHighlighted,
+                               bool                shouldDrawButtonAsDown) override;
 
-    void drawTickBox (juce::Graphics& g, juce::Component& component,
-                      float x, float y, float w, float h,
-                      const bool ticked, const bool isEnabled,
-                      const bool shouldDrawButtonAsHighlighted,
-                      const bool shouldDrawButtonAsDown) override;
+    void drawTickBox (juce::Graphics&  g,
+                      juce::Component& component,
+                      float            x,
+                      float            y,
+                      float            w,
+                      float            h,
+                      const bool       ticked,
+                      const bool       isEnabled,
+                      const bool       shouldDrawButtonAsHighlighted,
+                      const bool       shouldDrawButtonAsDown) override;
 
-    void drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height, float sliderPos,
-                           const float rotaryStartAngle, const float rotaryEndAngle, juce::Slider& slider) override;
+    void drawRotarySlider (juce::Graphics& g,
+                           int             x,
+                           int             y,
+                           int             width,
+                           int             height,
+                           float           sliderPos,
+                           const float     rotaryStartAngle,
+                           const float     rotaryEndAngle,
+                           juce::Slider&   slider) override;
 
-    void drawGroupComponentOutline (juce::Graphics& g, int width, int height, const juce::String& text,
-                                    const juce::Justification& position, juce::GroupComponent& group) override;
+    void drawGroupComponentOutline (juce::Graphics&            g,
+                                    int                        width,
+                                    int                        height,
+                                    const juce::String&        text,
+                                    const juce::Justification& position,
+                                    juce::GroupComponent&      group) override;
 
-    void drawToggleButton (juce::Graphics&, juce::ToggleButton&, bool shouldDrawButtonAsHighlighted,
+    void drawToggleButton (juce::Graphics&,
+                           juce::ToggleButton&,
+                           bool shouldDrawButtonAsHighlighted,
                            bool shouldDrawButtonAsDown) override;
 
-    void drawDrawableButton (juce::Graphics& g, juce::DrawableButton& button,
-                             bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
+    void drawDrawableButton (juce::Graphics&       g,
+                             juce::DrawableButton& button,
+                             bool                  shouldDrawButtonAsHighlighted,
+                             bool                  shouldDrawButtonAsDown) override;
 
 private:
     juce::Image tickedButtonImage, untickedButtonImage;

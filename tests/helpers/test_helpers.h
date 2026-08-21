@@ -22,10 +22,10 @@
 [[maybe_unused]] static void runWithinPluginEditor (const std::function<void (ProPhatProcessor& plugin)>& testCode)
 {
     ProPhatProcessor plugin;
-    const auto editor = plugin.createEditorIfNeeded();
+    auto* const     editor = plugin.createEditorIfNeeded();
 
     testCode (plugin);
 
     plugin.editorBeingDeleted (editor);
-    delete editor;
+    delete editor; // NOLINT
 }
