@@ -16,8 +16,8 @@ int main (int argc, char* argv[])
     return result;
 }
 
-#include "ui/ProPhatEditor.h"                        // IWYU pragma: keep
-#include "catch2/benchmark/catch_benchmark_all.hpp" // IWYU pragma: keep
-#include "catch2/catch_test_macros.hpp"             // IWYU pragma: keep
+#include "UI/ProPhatEditor.h"                        // IWYU pragma: keep
+#include "catch2/benchmark/catch_benchmark_all.hpp"  // IWYU pragma: keep
+#include "catch2/catch_test_macros.hpp"              // IWYU pragma: keep
 
 #include "Benchmarks.cpp" // NOLINT(bugprone-suspicious-include) intentional unity-build pattern for Catch2 benchmarks
