@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Pre-commit hook: refuses commits whose staged C/C++ files aren't clang-format clean.
+#
+# Install (one-time):
+#   git config core.hooksPath .githooks
+
+set -euo pipefail
+
+if ! command -v clang-format >/dev/null 2>&1; then
+    echo "pre-commit: clang-format not found on PATH." >&2
+    echo "  macOS:  brew install clang-format" >&2
+    echo "  Linux:  apt install clang-format    (or your distro's equivalent)" >&2
+    exit 1
+fi
+
+# Only consider files inside our owned trees — submodules and generated dirs
+# are skipped by virtue of not appearing here.
+#
+# `mapfile` would be cleaner but doesn't exist in Bash 3.2 (macOS's default).
+staged=()
+while IFS= read -r line; do
+    [[ -n "$line" ]] && staged+=("$line")
+done < <(git diff --cached --name-only --diff-filter=ACM \
+         | grep -E '^(source|tests|benchmarks)/.*\.(cpp|h|hpp|cc|c|cxx|hxx)$' \
+         || true)
+
+if [[ ${#staged[@]} -eq 0 ]]; then
+    exit 0
+fi
+
+unformatted=()
+for f in "${staged[@]}"; do
+    if ! clang-format --dry-run --Werror "$f" >/dev/null 2>&1; then
+        unformatted+=("$f")
+    fi
+done
+
+if [[ ${#unformatted[@]} -gt 0 ]]; then
+    echo "pre-commit: clang-format violations in staged files:" >&2
+    for f in "${unformatted[@]}"; do
+        clang-format --dry-run --Werror "$f" 2>&1 | sed 's/^/  /' >&2 || true
+    done
+    echo >&2
+    echo "Fix with:" >&2
+    echo "  clang-format -i ${unformatted[*]}" >&2
+    echo "  git add ${unformatted[*]}" >&2
+    exit 1
+fi

@@ -48,7 +48,8 @@ Vector simdAdd (const Vector& a, const Vector& b)
 
     //perform the simd addition
     auto i = 0u;
-    for (; i < vectorizableSamples; i += FLOATS_IN_AVX_REGISTER)    //here we're looping in chunks of whatever the registers can take
+    //here we're looping in chunks of whatever the registers can take
+    for (; i < vectorizableSamples; i += FLOATS_IN_AVX_REGISTER)
     {
         // load data from the buffer to the simd registers
         // the ai suggested this
@@ -79,19 +80,20 @@ Vector simdAdd (const Vector& a, const Vector& b)
 #endif
 
 ProPhatProcessor::ProPhatProcessor()
-    : juce::AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true))
-    , state { constructState () }
-    , proPhatSynthFloat (state)
-    , proPhatSynthDouble (state)
+: juce::AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+  state { constructState() },
+  proPhatSynthFloat (state),
+  proPhatSynthDouble (state)
 #if CPU_USAGE
-    , perfCounter ("ProcessBlock")
+  ,
+  perfCounter ("ProcessBlock")
 #endif
 {
 #if TEST_SIMD
-    Vector a(17, 1.f);
-    auto result = simdAdd (a, a);
+    Vector a (17, 1.f);
+    auto   result = simdAdd (a, a);
     //print the result vector using ranges
-    std::ranges::copy(result, std::ostream_iterator<char>(std::cout, " "));
+    std::ranges::copy (result, std::ostream_iterator<char> (std::cout, " "));
 #endif
 }
 
@@ -111,13 +113,14 @@ void ProPhatProcessor::releaseResources()
         proPhatSynthFloat.releaseResources();
 }
 
-juce::AudioProcessorValueTreeState ProPhatProcessor::constructState ()
+juce::AudioProcessorValueTreeState ProPhatProcessor::constructState()
 {
     using namespace Constants;
     using namespace ProPhatParameterIds;
     using namespace ProPhatAudioProcessorChoices;
 
     //TODO: add undo manager!
+    // clang-format off
     return { *this, nullptr, "state",
     {
         std::make_unique<juce::AudioParameterInt>    (osc1FreqID, osc1FreqID.getParamID (), midiNoteRange.getRange ().getStart (), midiNoteRange.getRange ().getEnd (), defaultOscMidiNote),
@@ -162,6 +165,7 @@ juce::AudioProcessorValueTreeState ProPhatProcessor::constructState ()
 
         std::make_unique<juce::AudioParameterFloat>  (masterGainID, masterGainID.getParamID (), sliderRange, defaultMasterGain)
     }};
+    // clang-format on
 }
 
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -172,7 +176,7 @@ bool ProPhatProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 }
 #endif
 
-void ProPhatProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) NONBLOCKING
+void ProPhatProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) RTSAN_NONBLOCKING
 {
     jassert (! isUsingDoublePrecision());
 
@@ -183,7 +187,8 @@ void ProPhatProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     process (buffer, midiMessages);
 }
 
-void ProPhatProcessor::processBlock (juce::AudioBuffer<double>& buffer, juce::MidiBuffer& midiMessages) NONBLOCKING
+void ProPhatProcessor::processBlock (juce::AudioBuffer<double>& buffer,
+                                     juce::MidiBuffer&          midiMessages) RTSAN_NONBLOCKING
 {
     jassert (isUsingDoublePrecision());
 
@@ -200,15 +205,15 @@ void ProPhatProcessor::process (juce::AudioBuffer<T>& buffer, juce::MidiBuffer& 
     juce::ScopedNoDenormals noDenormals;
 
 #if CPU_USAGE
-    perfCounter.start ();
+    perfCounter.start();
 #endif
 
     //we're not dealing with any inputs here, so clear the buffer
-    buffer.clear ();
+    buffer.clear();
 
     for (const auto metadata : midiMessages)
     {
-        if (metadata.getMessage ().isNoteOn ())
+        if (metadata.getMessage().isNoteOn())
         {
             midiListeners.call ([&midiMessages] (MidiMessageListener& l) { l.receivedMidiMessage (midiMessages); });
             break;
@@ -228,7 +233,7 @@ void ProPhatProcessor::process (juce::AudioBuffer<T>& buffer, juce::MidiBuffer& 
 
 void ProPhatProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    if (auto xmlState { state.copyState ().createXml () })
+    if (auto xmlState { state.copyState().createXml() })
         copyXmlToBinary (*xmlState, destData);
 }
 
@@ -238,12 +243,6 @@ void ProPhatProcessor::setStateInformation (const void* data, int sizeInBytes)
         state.replaceState (juce::ValueTree::fromXml (*xmlState));
 }
 
-juce::AudioProcessorEditor* ProPhatProcessor::createEditor()
-{
-    return new ProPhatEditor (*this);
-}
+juce::AudioProcessorEditor* ProPhatProcessor::createEditor() { return new ProPhatEditor (*this); }
 
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
-{
-    return new ProPhatProcessor();
-}
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new ProPhatProcessor(); }

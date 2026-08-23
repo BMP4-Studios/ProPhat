@@ -35,37 +35,37 @@ class ProPhatProcessor : public juce::AudioProcessor
 public:
     ProPhatProcessor();
 
-    bool supportsDoublePrecisionProcessing () const override { return true; }
+    bool supportsDoublePrecisionProcessing() const override { return true; }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
-    void reset () override {}
-    void releaseResources () override;
+    void reset() override {}
+    void releaseResources() override;
 
 #ifndef JucePlugin_PreferredChannelConfigurations
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
 #endif
 
-    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) NONBLOCKING override;
-    void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) NONBLOCKING override;
+    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) RTSAN_NONBLOCKING override;
+    void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) RTSAN_NONBLOCKING override;
 
     template <std::floating_point T>
     void process (juce::AudioBuffer<T>& buffer, juce::MidiBuffer& midiMessages);
 
     juce::AudioProcessorEditor* createEditor() override;
-    bool hasEditor() const override { return true; }
+    bool                        hasEditor() const override { return true; }
 
     const juce::String getName() const override { return JucePlugin_Name; }
 
-    bool acceptsMidi() const override { return true; }
-    bool producesMidi() const override { return false; }
-    bool isMidiEffect() const override { return false; }
+    bool   acceptsMidi() const override { return true; }
+    bool   producesMidi() const override { return false; }
+    bool   isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int /*index*/) override { }
+    int                getNumPrograms() override { return 1; }
+    int                getCurrentProgram() override { return 0; }
+    void               setCurrentProgram (int /*index*/) override {}
     const juce::String getProgramName (int /*index*/) override { return {}; }
-    void changeProgramName (int /*index*/, const juce::String& /*newName*/) override { }
+    void               changeProgramName (int /*index*/, const juce::String& /*newName*/) override {}
 
     void getStateInformation (juce::MemoryBlock& destData) override;
 
@@ -83,16 +83,16 @@ public:
     struct MidiMessageListener
     {
         virtual void receivedMidiMessage (juce::MidiBuffer& midiMessages) = 0;
-        virtual ~MidiMessageListener() = default;
+        virtual ~MidiMessageListener()                                    = default;
     };
 
     juce::ListenerList<MidiMessageListener> midiListeners;
 
 private:
-    ProPhatSynthesiser<float> proPhatSynthFloat;
+    ProPhatSynthesiser<float>  proPhatSynthFloat;
     ProPhatSynthesiser<double> proPhatSynthDouble;
 
-    juce::AudioProcessorValueTreeState constructState ();
+    juce::AudioProcessorValueTreeState constructState();
 
 #if TRIGGER_RTSAN
     juce::CriticalSection processBlockLock;
