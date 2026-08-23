@@ -15,5 +15,5 @@ jobs:
     # only narrow permissions, never widen them. Harmless on a scheduled run
     # (there's no PR to comment on) but required for the workflow to validate.
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
