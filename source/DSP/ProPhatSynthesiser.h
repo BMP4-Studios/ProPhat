@@ -36,14 +36,14 @@
 template <std::floating_point T>
 class ProPhatSynthesiser : public LockFreeSynthesiser, public juce::AudioProcessorValueTreeState::Listener
 {
-  public:
+public:
     ProPhatSynthesiser (juce::AudioProcessorValueTreeState& processorState);
 
     void addParamListenersToState();
 
     void prepare (const juce::dsp::ProcessSpec& spec) noexcept;
 
-    void releaseResources ();
+    void releaseResources();
 
     void parameterChanged (const juce::String& parameterID, float newValue) override;
 
@@ -51,7 +51,7 @@ class ProPhatSynthesiser : public LockFreeSynthesiser, public juce::AudioProcess
 
     void noteOn (const int midiChannel, const int midiNoteNumber, const float velocity) override;
 
-  private:
+private:
     void renderVoices (juce::AudioBuffer<T>& outputAudio, int startSample, int numSamples) override;
 
     //TODO: make this into a bit mask thing?
@@ -72,8 +72,7 @@ class ProPhatSynthesiser : public LockFreeSynthesiser, public juce::AudioProcess
 //=====================================================================================================================
 
 template <std::floating_point T>
-ProPhatSynthesiser<T>::ProPhatSynthesiser (juce::AudioProcessorValueTreeState& processorState)
-: state (processorState)
+ProPhatSynthesiser<T>::ProPhatSynthesiser (juce::AudioProcessorValueTreeState& processorState) : state (processorState)
 {
     for (auto i = 0; i < Constants::numVoices; ++i)
         addVoice (new ProPhatVoice<T> (state, i, &voicesBeingKilled));
@@ -111,7 +110,7 @@ void ProPhatSynthesiser<T>::addParamListenersToState()
 template <std::floating_point T>
 void ProPhatSynthesiser<T>::prepare (const juce::dsp::ProcessSpec& spec) noexcept
 {
-    if (Helpers::areSameSpecs (curSpecs, spec))
+    if (curSpecs == spec)
         return;
 
     curSpecs = spec;
@@ -142,13 +141,13 @@ void ProPhatSynthesiser<T>::parameterChanged (const juce::String& parameterID, f
 
     //DBG ("ProPhatSynthesiser::parameterChanged (" + parameterID + ", " + juce::String (newValue));
 
-    if (parameterID == masterGainID.getParamID ())
+    if (parameterID == masterGainID.getParamID())
         setMasterGain (newValue);
 
 #if ! EFFECTS_PROCESSOR_PER_VOICE
     else if (parameterID == reverbParam1ID.getParamID() || parameterID == reverbParam2ID.getParamID()
-        || parameterID == chorusParam1ID.getParamID() || parameterID == chorusParam2ID.getParamID()
-        || parameterID == phaserParam1ID.getParamID() || parameterID == phaserParam2ID.getParamID())
+             || parameterID == chorusParam1ID.getParamID() || parameterID == chorusParam2ID.getParamID()
+             || parameterID == phaserParam1ID.getParamID() || parameterID == phaserParam2ID.getParamID())
         effectsProcessor.setEffectParam (parameterID, newValue);
     else if (parameterID == effectSelectedID.getParamID())
     {
