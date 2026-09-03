@@ -28,10 +28,10 @@ template <std::floating_point T>
 class GainedOscillator
 {
 public:
-    GainedOscillator () :
-        distribution ((T) -1, (T) 1)
+    GainedOscillator() : distribution (static_cast<T> (-1), static_cast<T> (1))
     {
         //TODO: I should compare these waves on the scope with the waves from the prophet
+        // clang-format off
         oscs[OscShape::none].initialise ([] (T /*x*/) { return T (0); });
         oscs[OscShape::saw].initialise  ([] (T x) { return juce::jmap (x, T (-juce::MathConstants<T>::pi), T (juce::MathConstants<T>::pi), T (-1), T (1)); }, 2);
 
@@ -55,7 +55,7 @@ public:
 
         oscs[OscShape::pulse].initialise ([] (T x) { if (x < 0) return T (-1); else return T (1); }, 16);
         oscs[OscShape::noise].initialise ([this] (T /*x*/) { return distribution (generator); });
-
+        // clang-format on
         setOscShape (OscShape::saw);
         setGain (Constants::defaultOscLevel);
     }
@@ -71,12 +71,14 @@ public:
     {
         switch (newShape)
         {
-            case OscShape::none:     curOsc.store (&oscs[OscShape::none]);      break;
-            case OscShape::saw:      curOsc.store (&oscs[OscShape::saw]);       break;
-            case OscShape::sawTri:   curOsc.store (&oscs[OscShape::sawTri]);    break;
-            case OscShape::triangle: curOsc.store (&oscs[OscShape::triangle]);  break;
-            case OscShape::pulse:    curOsc.store (&oscs[OscShape::pulse]);     break;
-            case OscShape::noise:    curOsc.store (&oscs[OscShape::noise]);     break;
+            case OscShape::none: curOsc.store (&oscs[OscShape::none]); break;
+            case OscShape::saw: curOsc.store (&oscs[OscShape::saw]); break;
+            case OscShape::sawTri: curOsc.store (&oscs[OscShape::sawTri]); break;
+            case OscShape::triangle: curOsc.store (&oscs[OscShape::triangle]); break;
+            case OscShape::pulse: curOsc.store (&oscs[OscShape::pulse]); break;
+            case OscShape::noise: curOsc.store (&oscs[OscShape::noise]); break;
+            case OscShape::totalSelectable:
+            case OscShape::actualTotal:
             default: jassertfalse;
         }
     }
@@ -84,21 +86,18 @@ public:
     /** @brief Sets the gain for the oscillator in the processorChain.
         This ends up calling juce::dsp::Gain::setGainLinear(), which will ramp the change.
     */
-    void setGain (T newGain)
-    {
-        gain.setGainLinear (newGain);
-    }
+    void setGain (T newGain) { gain.setGainLinear (newGain); }
 
-    void reset () noexcept
+    void reset() noexcept
     {
-        curOsc.load ()->reset();
+        curOsc.load()->reset();
         gain.reset();
     }
 
     template <typename ProcessContext>
     void process (const ProcessContext& context) noexcept
     {
-        curOsc.load ()->process (context);
+        curOsc.load()->process (context);
         gain.process (context);
     }
 
@@ -111,15 +110,12 @@ public:
     }
 
 private:
-
     std::array<juce::dsp::Oscillator<T>, OscShape::actualTotal> oscs;
-    std::atomic<juce::dsp::Oscillator<T>*> curOsc { nullptr };
+    std::atomic<juce::dsp::Oscillator<T>*>                      curOsc { nullptr };
 
-    T lastActiveGain {};
+    T                  lastActiveGain {};
     juce::dsp::Gain<T> gain;
 
     std::uniform_real_distribution<T> distribution;
-    std::default_random_engine generator;
+    std::default_random_engine        generator;
 };
-
-//====================================================================================================
